@@ -35,6 +35,11 @@ const cn = {
       CompressedHistory: "查看压缩后的历史 Prompt",
       Export: "导出聊天记录",
       Copy: "复制",
+      Download: "下载",
+      Preview: "预览",
+      ShowCode: "代码",
+      PreviewFullscreen: "点击预览全屏",
+      ViewImage: "点击查看大图",
       Stop: "停止",
       Retry: "重试",
       Pin: "固定",
@@ -44,6 +49,8 @@ const cn = {
       Edit: "编辑",
       EditToInput: "编辑为输入",
       EditNoMessage: "没有消息可以编辑",
+      Save: "保存",
+      Cancel: "取消",
       FullScreen: "全屏",
       RefreshTitle: "刷新标题",
       RefreshToast: "已发送刷新标题请求",
@@ -348,8 +355,9 @@ const cn = {
     },
     Avatar: "头像",
     FontSize: {
-      Title: "字体大小",
-      SubTitle: "聊天内容的字体大小",
+      Title: "本程序应用的字体基准",
+      SubTitle:
+        "整体程序风格的字体基准（1em）, 参考聊天标题的字体大小，如自定义css中有设置则以自定义css为准",
     },
     InjectSystemPrompts: {
       Title: "注入系统级提示信息",
@@ -368,6 +376,15 @@ const cn = {
       IsChecking: "正在检查更新...",
       FoundUpdate: (x: string) => `发现新版本：${x}`,
       GoToUpdate: "前往更新",
+    },
+    CustomCSS: {
+      Title: "自定义CSS",
+      SubTitleEnabled: "自定义CSS样式已启用",
+      SubTitleDisabled: "自定义CSS样式已禁用",
+      Edit: "编辑CSS",
+      Enable: "启用自定义CSS",
+      More: "获取更多主题",
+      Hint: "您可以自定义全局CSS样式，例如修改主题色，设置AI消息框最大宽度等，完整的变量列表可参考应用的globals.scss文件。",
     },
     Personalization: {
       Title: "个性化设置",
@@ -558,7 +575,7 @@ const cn = {
         ApiKey: {
           Title: "API 密钥",
           SubTitle: "从 Google AI 获取您的 API 密钥",
-          Placeholder: "输入您的 Google AI Studio API 密钥",
+          Placeholder: "Google AI Studio API",
         },
 
         Endpoint: {
@@ -824,6 +841,8 @@ const cn = {
     SubTitle: "现在开始，与面具背后的灵魂思维碰撞",
     More: "展开",
     Less: "折叠",
+    ShowCode: "显示代码",
+    Preview: "预览",
     Searching: "搜索中...",
     Search: "搜索内容",
     NoSearch: "没有搜索内容",
@@ -948,6 +967,7 @@ const cn = {
     NormalView: "密钥：普通视图",
     AddKey: "添加密钥",
     ClearInput: "清除输入",
+    ClearDisabledKeys: "清除禁用密钥",
     ClearSelectKeys: "清除选中密钥",
     RefreshBalance: "刷新余额",
     RemoveInvalidKey: "删除无效密钥",

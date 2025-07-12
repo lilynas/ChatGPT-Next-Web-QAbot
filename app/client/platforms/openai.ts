@@ -61,11 +61,55 @@ interface RequestPayload {
     include_usage?: boolean;
   };
 }
+/**
+ * 根据模型名称和配置，解析出对应的额外参数
+ * 支持：
+ *  1. 精确匹配
+ *  2. 前缀通配符（*suffix） / 后缀通配符（prefix*） / 中间通配符（pre*suf）
+ *  3. 通用 *
+ */
+function resolveExtraParams(
+  modelName: string,
+  paramsConfig: Record<string, any>,
+): Record<string, any> {
+  if (!paramsConfig) return {};
 
+  // 1. 精确匹配
+  if (paramsConfig[modelName]) {
+    return { ...paramsConfig[modelName] };
+  }
+
+  // 2. 通配符匹配（排除 '*'，后面单独处理）
+  for (const pat of Object.keys(paramsConfig).filter((k) => k !== "*")) {
+    // 前缀通配符: *suffix
+    if (pat.startsWith("*") && modelName.endsWith(pat.slice(1))) {
+      return { ...paramsConfig[pat] };
+    }
+    // 后缀通配符: prefix*
+    if (pat.endsWith("*") && modelName.startsWith(pat.slice(0, -1))) {
+      return { ...paramsConfig[pat] };
+    }
+    // 中间通配符: pre*suf
+    if (pat.includes("*") && !pat.startsWith("*") && !pat.endsWith("*")) {
+      const [pre, suf] = pat.split("*");
+      if (modelName.startsWith(pre) && modelName.endsWith(suf)) {
+        return { ...paramsConfig[pat] };
+      }
+    }
+  }
+
+  // 3. '*' 兜底
+  if (paramsConfig["*"]) {
+    return { ...paramsConfig["*"] };
+  }
+
+  return {};
+}
 export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
   private readonly baseUrl: string = "";
   private readonly apiKey: string = "";
+  private readonly enableKeyList: string[] = [];
   private readonly chatPath: string = "";
   private readonly imagePath: string = "";
   private readonly speechPath: string = "";
@@ -77,6 +121,7 @@ export class ChatGPTApi implements LLMApi {
       if (CustomProviderConfig) {
         this.baseUrl = CustomProviderConfig.baseUrl;
         this.apiKey = CustomProviderConfig.apiKey;
+        this.enableKeyList = CustomProviderConfig.enableKeyList || [];
         this.chatPath = CustomProviderConfig?.paths?.ChatPath || "";
         this.imagePath = CustomProviderConfig?.paths?.ImagePath || "";
         this.speechPath = CustomProviderConfig?.paths?.SpeechPath || "";
@@ -185,7 +230,7 @@ export class ChatGPTApi implements LLMApi {
         method: "POST",
         body: JSON.stringify(requestPayload),
         signal: controller.signal,
-        headers: getHeaders(false, this.apiKey),
+        headers: getHeaders(false, this.apiKey, this.enableKeyList),
       };
 
       // make a fetch request
@@ -204,6 +249,9 @@ export class ChatGPTApi implements LLMApi {
   }
 
   async chat(options: ChatOptions) {
+    const accessStore = useAccessStore.getState();
+    const paramsConfig = accessStore.modelParams as Record<string, any>;
+    const extraParams = resolveExtraParams(options.config.model, paramsConfig);
     // const visionModel = isVisionModel(options.config.model);
     const model_name = options.config.model.toLowerCase();
     const isPureGPT =
@@ -380,6 +428,8 @@ export class ChatGPTApi implements LLMApi {
       }
     }
 
+    Object.assign(requestPayload, extraParams);
+
     console.log("[Request] openai payload: ", requestPayload);
 
     const shouldStream = !!requestPayload["stream"]; // && !isO1; // o1 已经开始支持流式
@@ -392,7 +442,7 @@ export class ChatGPTApi implements LLMApi {
         method: "POST",
         body: JSON.stringify(requestPayload),
         signal: controller.signal,
-        headers: getHeaders(false, this.apiKey),
+        headers: getHeaders(false, this.apiKey, this.enableKeyList),
       };
 
       // make a fetch request
@@ -758,12 +808,12 @@ export class ChatGPTApi implements LLMApi {
         ),
         {
           method: "GET",
-          headers: getHeaders(false, this.apiKey),
+          headers: getHeaders(false, this.apiKey, this.enableKeyList),
         },
       ),
       fetch(this.path(OpenaiPath.SubsPath), {
         method: "GET",
-        headers: getHeaders(false, this.apiKey),
+        headers: getHeaders(false, this.apiKey, this.enableKeyList),
       }),
     ]);
 
@@ -815,7 +865,7 @@ export class ChatGPTApi implements LLMApi {
       {
         method: "GET",
         headers: {
-          ...getHeaders(false, this.apiKey),
+          ...getHeaders(false, this.apiKey, this.enableKeyList),
         },
       },
     );
