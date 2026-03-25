@@ -83,6 +83,7 @@ import {
   autoGrowTextArea,
   useMobileScreen,
   getMessageTextContent,
+  getMessageTextContentWithoutThinkingFromContent,
   getMessageImages,
   getMessageFiles,
   isVisionModel,
@@ -95,7 +96,13 @@ import {
 } from "../utils";
 import { estimateTokenLengthInLLM } from "@/app/utils/token";
 
-import type { UploadFile } from "../client/api";
+import type {
+  ClientApi,
+  Model,
+  MultimodalContent,
+  RichMessage,
+  UploadFile,
+} from "../client/api";
 import { uploadImage as uploadImageRemote } from "@/app/utils/chat";
 import { uploadFileRemote } from "@/app/utils/chat";
 import Image from "next/image";
@@ -151,9 +158,7 @@ import { prettyObject } from "../utils/format";
 import { ExportMessageModal } from "./exporter";
 import { getClientConfig } from "../config/client";
 import { useModelTable } from "../context/model-table";
-import { Model, MultimodalContent, getClientApi } from "../client/api";
-
-import { ClientApi } from "../client/api";
+import { getClientApi } from "../client/api";
 import { createTTSPlayer } from "../utils/audio";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "../utils/ms_edge_tts";
 
@@ -741,10 +746,8 @@ export function ChatActions(props: {
       },
       onFinish(message, responseRes) {
         if (responseRes?.status === 200) {
-          if (typeof message !== "string") {
-            message = message.content;
-          }
-          if (!isValidMessage(message)) {
+          const translatedContent = getAuxiliaryResponseContent(message);
+          if (!isValidMessage(translatedContent)) {
             toastController.update(
               Locale.Chat.InputActions.Translate.FailTranslateToast,
               3000,
@@ -752,9 +755,6 @@ export function ChatActions(props: {
             setIsTranslating(false);
             return;
           }
-
-          let translatedContent = message;
-          translatedContent = translatedContent || props.userInput; // 避免空翻译无法撤销
 
           // 保存原始文本和翻译结果以便撤销
           setOriginalTextForTranslate(props.userInput);
@@ -833,10 +833,8 @@ export function ChatActions(props: {
       },
       onFinish(message, responseRes) {
         if (responseRes?.status === 200) {
-          if (typeof message !== "string") {
-            message = message.content;
-          }
-          if (!isValidMessage(message)) {
+          const detectedContent = getAuxiliaryResponseContent(message);
+          if (!isValidMessage(detectedContent)) {
             toastController.update(
               Locale.Chat.InputActions.OCR.FailDetectToast,
               3000,
@@ -845,7 +843,9 @@ export function ChatActions(props: {
             return;
           }
           props.setUserInput(
-            `${props.userInput}${props.userInput ? "\n" : ""}${message}`,
+            `${props.userInput}${
+              props.userInput ? "\n" : ""
+            }${detectedContent}`,
           );
           props.setAttachImages([]);
           toastController.update(
@@ -915,10 +915,8 @@ export function ChatActions(props: {
       },
       onFinish(message, responseRes) {
         if (responseRes?.status === 200) {
-          if (typeof message !== "string") {
-            message = message.content;
-          }
-          if (!isValidMessage(message)) {
+          const optimizedContent = getAuxiliaryResponseContent(message);
+          if (!isValidMessage(optimizedContent)) {
             toastController.update(
               Locale.Chat.InputActions.ImprovePrompt.FailImprovingToast,
               3000,
@@ -927,10 +925,7 @@ export function ChatActions(props: {
             return;
           }
 
-          let optimizedContent = message;
-          optimizedContent = optimizedContent || props.userInput; // 避免空翻译无法撤销
-
-          // 保存原始文本和翻译结果以便撤销
+          // 保存原始文本和优化结果以便撤销
           setOriginalPromptForImproving(props.userInput);
           setOptimizedPrompt(optimizedContent);
           props.setUserInput(optimizedContent);
@@ -1114,11 +1109,20 @@ export function ChatActions(props: {
     setIsContinue(false);
   };
 
+  function getAuxiliaryResponseContent(message: string | RichMessage) {
+    return getMessageTextContentWithoutThinkingFromContent(
+      typeof message === "string" ? message : message.content,
+    );
+  }
+
   function isValidMessage(message: any): boolean {
     if (typeof message !== "string") {
       return false;
     }
     message = message.trim();
+    if (message.length === 0) {
+      return false;
+    }
     if (message.startsWith("```") && message.endsWith("```")) {
       const codeBlockContent = message.slice(3, -3).trim();
       const jsonString = codeBlockContent.replace(/^json\s*/i, "").trim();

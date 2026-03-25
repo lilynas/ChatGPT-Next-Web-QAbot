@@ -2,6 +2,7 @@ import {
   trimTopic,
   getMessageTextContent,
   getMessageTextContentWithoutThinking,
+  getMessageTextContentWithoutThinkingFromContent,
   isImageGenerationModel,
 } from "../utils";
 
@@ -19,6 +20,7 @@ import {
 import type {
   ClientApi,
   RequestMessage,
+  RichMessage,
   MultimodalContent,
   UploadFile,
 } from "../client/api";
@@ -79,6 +81,12 @@ export function createMessage(override: Partial<ChatMessage>): ChatMessage {
     content: "",
     ...override,
   };
+}
+
+function getResponseContentWithoutThinking(message: string | RichMessage) {
+  return getMessageTextContentWithoutThinkingFromContent(
+    typeof message === "string" ? message : message.content,
+  );
 }
 
 export interface ChatStat {
@@ -1082,8 +1090,7 @@ export const useChatStore = createPersistStore(
             type: "topic",
             onFinish(message, responseRes) {
               if (responseRes?.status === 200) {
-                let replyContent: string =
-                  typeof message === "string" ? message : message.content;
+                const replyContent = getResponseContentWithoutThinking(message);
                 if (!isValidMessage(replyContent)) {
                   showToast(Locale.Chat.Actions.FailTitleToast);
                   return;
@@ -1175,13 +1182,13 @@ export const useChatStore = createPersistStore(
             },
             type: "compress",
             onUpdate(message) {
-              session.memoryPrompt = message;
+              session.memoryPrompt =
+                getMessageTextContentWithoutThinkingFromContent(message);
             },
             onFinish(message, responseRes) {
               if (responseRes?.status === 200) {
                 console.log("[Memory] ", message);
-                let replyContent =
-                  typeof message === "string" ? message : message.content;
+                const replyContent = getResponseContentWithoutThinking(message);
                 if (!isValidMessage(replyContent)) {
                   return;
                 }
@@ -1197,6 +1204,13 @@ export const useChatStore = createPersistStore(
           });
         }
         function isValidMessage(message: any): boolean {
+          if (typeof message !== "string") {
+            return false;
+          }
+          message = message.trim();
+          if (message.length === 0) {
+            return false;
+          }
           if (message.startsWith("```") && message.endsWith("```")) {
             // 提取包裹的内容
             const jsonString = message.slice(3, -3).trim(); // 去掉开头和结尾的 ```
@@ -1213,7 +1227,7 @@ export const useChatStore = createPersistStore(
               console.log("Invalid JSON format.");
             }
           }
-          return typeof message === "string" && !message.startsWith("```json");
+          return !message.startsWith("```json");
         }
       },
 
