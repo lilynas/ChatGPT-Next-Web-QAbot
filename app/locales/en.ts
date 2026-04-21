@@ -382,6 +382,8 @@ const en: LocaleType = {
       ExpirationLabel: "Expiration Tile:",
       Warning:
         "⚠️ The shared link will be public, anyone with the link can access it.",
+      Fullscreen: "Fullscreen",
+      ExitFullscreen: "Exit Fullscreen",
     },
   },
   Select: {

@@ -21,6 +21,23 @@
     padding: 0 20px 20px 20px;
     background-color: var(--second);
   }
+  &-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+    .artifacts-content {
+      padding: 0;
+    }
+  }
+  &-exit-fullscreen {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1001;
+  }
 }
 
 .artifacts-iframe {

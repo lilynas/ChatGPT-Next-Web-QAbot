@@ -359,6 +359,8 @@ const cn = {
       SetExpiration: "设置分享过期时间",
       ExpirationLabel: "过期时间:",
       Warning: "⚠️ 分享链接将公开，拿到链接的任何人都可以访问",
+      Fullscreen: "全屏",
+      ExitFullscreen: "退出全屏",
     },
   },
   Select: {

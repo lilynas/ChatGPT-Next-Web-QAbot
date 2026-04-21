@@ -15,6 +15,8 @@ import DownloadIcon from "../icons/download.svg";
 import GithubIcon from "../icons/github.svg";
 import LoadingButtonIcon from "../icons/loading.svg";
 import ReloadButtonIcon from "../icons/reload.svg";
+import FullscreenButtonIcon from "../icons/max.svg";
+import ExitFullscreenButtonIcon from "../icons/min.svg";
 import Locale from "../locales";
 import { Modal, showToast } from "./ui-lib";
 import { copyToClipboard, downloadAs } from "../utils";
@@ -359,6 +361,7 @@ export function Artifacts() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [fileName, setFileName] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const previewRef = useRef<HTMLPreviewHander>(null);
 
   useEffect(() => {
@@ -393,26 +396,45 @@ export function Artifacts() {
     }
   }, [id]);
 
+  const toggleFullscreen = () => {
+    setIsFullscreen((prev) => !prev);
+  };
+
   return (
-    <div className={styles["artifacts"]}>
-      <div className={styles["artifacts-header"]}>
-        <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
-          <IconButton bordered icon={<GithubIcon />} shadow />
-        </a>
-        <IconButton
-          bordered
-          style={{ marginLeft: 20 }}
-          icon={<ReloadButtonIcon />}
-          shadow
-          onClick={() => previewRef.current?.reload()}
-        />
-        <div className={styles["artifacts-title"]}>NextChat Artifacts</div>
-        {/* <ArtifactsShareButton
-          id={id}
-          getCode={() => code}
-          fileName={fileName}
-        /> */}
-      </div>
+    <div
+      className={
+        styles["artifacts"] +
+        (isFullscreen ? " " + styles["artifacts-fullscreen"] : "")
+      }
+    >
+      {!isFullscreen && (
+        <div className={styles["artifacts-header"]}>
+          <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+            <IconButton bordered icon={<GithubIcon />} shadow />
+          </a>
+          <IconButton
+            bordered
+            style={{ marginLeft: 20 }}
+            icon={<ReloadButtonIcon />}
+            shadow
+            onClick={() => previewRef.current?.reload()}
+          />
+          <IconButton
+            bordered
+            style={{ marginLeft: 10 }}
+            icon={<FullscreenButtonIcon />}
+            shadow
+            title={Locale.Export.Artifacts.Fullscreen}
+            onClick={toggleFullscreen}
+          />
+          <div className={styles["artifacts-title"]}>NextChat Artifacts</div>
+          {/* <ArtifactsShareButton
+            id={id}
+            getCode={() => code}
+            fileName={fileName}
+          /> */}
+        </div>
+      )}
       <div className={styles["artifacts-content"]}>
         {loading && <Loading />}
         {code && (
@@ -428,6 +450,17 @@ export function Artifacts() {
           />
         )}
       </div>
+      {isFullscreen && (
+        <div className={styles["artifacts-exit-fullscreen"]}>
+          <IconButton
+            bordered
+            icon={<ExitFullscreenButtonIcon />}
+            shadow
+            title={Locale.Export.Artifacts.ExitFullscreen}
+            onClick={toggleFullscreen}
+          />
+        </div>
+      )}
     </div>
   );
 }
