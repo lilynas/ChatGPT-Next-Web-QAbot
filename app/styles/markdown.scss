@@ -417,9 +417,11 @@
 
 .markdown-body blockquote {
   margin: 0;
-  padding: 0 1em;
+  padding: 0.3em 0.8em;
   color: var(--color-fg-muted);
-  border-left: 0.25em solid var(--color-border-default);
+  border-left: 0.25em solid var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-radius: 0 8px 8px 0;
 }
 
 .markdown-body ul,
