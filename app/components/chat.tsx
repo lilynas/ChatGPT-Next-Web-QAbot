@@ -173,6 +173,18 @@ const localStorage = safeLocalStorage();
 
 const ttsPlayer = createTTSPlayer();
 
+type ResendMode = "direct" | "with-instruction";
+
+function appendRetryInstruction(content: string, instruction: string) {
+  const prefix = Locale.Chat.Actions.RetryInstructionPrefix;
+  const trimmedContent = content.trimEnd();
+  const trimmedInstruction = instruction.trim();
+
+  return trimmedContent
+    ? `${trimmedContent}\n\n${prefix}:\n${trimmedInstruction}`
+    : `${prefix}:\n${trimmedInstruction}`;
+}
+
 const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   ssr: false,
   loading: () => <LoadingIcon />,
@@ -464,6 +476,84 @@ export function ChatAction(props: {
       </div>
       {showTooltip && !shouldAlwaysShowText && (
         <div className={styles["chat-action-tooltip"]}>{props.text}</div>
+      )}
+    </div>
+  );
+}
+
+function ChatRetryAction(props: {
+  message: ChatMessage;
+  treeMode: boolean;
+  onResend: (message: ChatMessage, mode?: ResendMode) => void;
+}) {
+  const isMobileScreen = useMobileScreen();
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [showMenu]);
+
+  if (!props.treeMode) {
+    return (
+      <ChatAction
+        text={Locale.Chat.Actions.Retry}
+        icon={<ResetIcon />}
+        onClick={() => props.onResend(props.message)}
+      />
+    );
+  }
+
+  const runResend = (mode: ResendMode) => {
+    setShowMenu(false);
+    setShowTooltip(false);
+    props.onResend(props.message, mode);
+  };
+
+  return (
+    <div className={styles["chat-action-wrapper"]} ref={wrapperRef}>
+      <div
+        className={`${styles["chat-input-action"]} clickable`}
+        onClick={() => {
+          setShowMenu((show) => !show);
+          setShowTooltip(false);
+        }}
+        onMouseEnter={() =>
+          !isMobileScreen && !showMenu && setShowTooltip(true)
+        }
+        onMouseLeave={() => setShowTooltip(false)}
+      >
+        <div className={styles["icon"]}>
+          <ResetIcon />
+        </div>
+      </div>
+      {showTooltip && !showMenu && (
+        <div className={styles["chat-action-tooltip"]}>
+          {Locale.Chat.Actions.Retry}
+        </div>
+      )}
+      {showMenu && (
+        <div className={styles["retry-action-menu"]}>
+          <button type="button" onClick={() => runResend("with-instruction")}>
+            {Locale.Chat.Actions.RetryWithInstruction}
+          </button>
+          <button type="button" onClick={() => runResend("direct")}>
+            {Locale.Chat.Actions.RetryDirect}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1835,7 +1925,7 @@ export function ShortcutKeyModal(props: { onClose: () => void }) {
 function ChatInputActions(props: {
   message: ChatMessage;
   onUserStop: (messageId: string) => void;
-  onResend: (message: ChatMessage) => void;
+  onResend: (message: ChatMessage, mode?: ResendMode) => void;
   onDelete: (msgId: string) => void;
   onBreak: (msgId: string) => void;
   onPinMessage: (message: ChatMessage) => void;
@@ -1846,6 +1936,7 @@ function ChatInputActions(props: {
   config: any;
   i: number;
   hideRemovalActions?: boolean;
+  treeMode?: boolean;
 }) {
   const {
     message,
@@ -1861,6 +1952,7 @@ function ChatInputActions(props: {
     config,
     i,
     hideRemovalActions,
+    treeMode,
   } = props;
 
   return (
@@ -1873,10 +1965,10 @@ function ChatInputActions(props: {
         />
       ) : (
         <>
-          <ChatAction
-            text={Locale.Chat.Actions.Retry}
-            icon={<ResetIcon />}
-            onClick={() => onResend(message)}
+          <ChatRetryAction
+            message={message}
+            treeMode={!!treeMode}
+            onResend={onResend}
           />
 
           {!hideRemovalActions && (
@@ -3858,7 +3950,10 @@ function ChatComponent() {
     });
   };
 
-  const onResend = (message: ChatMessage) => {
+  const onResend = async (
+    message: ChatMessage,
+    mode: ResendMode = "direct",
+  ) => {
     // when it is resending a message
     // 1. for a user's message, find the next bot response
     // 2. for a bot's message, find the last user's input
@@ -3916,6 +4011,40 @@ function ChatComponent() {
           });
         }
       });
+    }
+
+    if (treeConversationEnabled && mode === "with-instruction") {
+      const instruction = await showPrompt(
+        Locale.Chat.Actions.RetryWithInstruction,
+        "",
+        5,
+      );
+      const trimmedInstruction = instruction.trim();
+      if (!trimmedInstruction) {
+        showToast(Locale.Chat.Actions.RetryInstructionEmpty);
+        inputRef.current?.focus();
+        return;
+      }
+
+      const userTreeNode = session.messageTree?.[userMessage.id];
+      const branchParentId =
+        userTreeNode?.parentId ?? userMessage.parentId ?? null;
+      const textContent = appendRetryInstruction(
+        getMessageTextContent(userMessage),
+        trimmedInstruction,
+      );
+      const images = getMessageImages(userMessage);
+
+      chatStore.onUserInput(
+        textContent,
+        images,
+        userAttachFiles,
+        userMessage.isContinuePrompt,
+        userMessage.quote,
+        branchParentId,
+      );
+      inputRef.current?.focus();
+      return;
     }
 
     if (!treeConversationEnabled) {
@@ -5889,13 +6018,15 @@ function ChatComponent() {
                                     }
                                   />
                                   {!isUser && (
-                                    <ChatAction
-                                      text={Locale.Chat.Actions.Retry}
-                                      icon={<ResetIcon />}
-                                      onClick={() =>
+                                    <ChatRetryAction
+                                      message={message}
+                                      treeMode={
+                                        treeConversationEnabled && !isSecondary
+                                      }
+                                      onResend={(message, mode) =>
                                         isSecondary
                                           ? onResendSecondary(message)
-                                          : onResend(message)
+                                          : onResend(message, mode)
                                       }
                                     />
                                   )}
@@ -6066,13 +6197,15 @@ function ChatComponent() {
                               <>
                                 {!isSecondary &&
                                   renderAssistantBranchSwitcher(message)}
-                                <ChatAction
-                                  text={Locale.Chat.Actions.Retry}
-                                  icon={<ResetIcon />}
-                                  onClick={() =>
+                                <ChatRetryAction
+                                  message={message}
+                                  treeMode={
+                                    treeConversationEnabled && !isSecondary
+                                  }
+                                  onResend={(message, mode) =>
                                     isSecondary
                                       ? onResendSecondary(message)
-                                      : onResend(message)
+                                      : onResend(message, mode)
                                   }
                                 />
                                 {(!treeConversationEnabled || isSecondary) && (
@@ -6335,6 +6468,7 @@ function ChatComponent() {
                                 config={config}
                                 i={i}
                                 hideRemovalActions={treeConversationEnabled}
+                                treeMode={treeConversationEnabled}
                               />
                             </div>
                           </div>
@@ -6524,6 +6658,7 @@ function ChatComponent() {
                               config={config}
                               i={i}
                               hideRemovalActions={treeConversationEnabled}
+                              treeMode={treeConversationEnabled}
                             />
                           </div>
                         </div>
