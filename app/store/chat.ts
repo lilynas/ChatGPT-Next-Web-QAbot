@@ -45,6 +45,9 @@ export type ChatMessage = RequestMessage & {
   parentId?: string;
   childrenIds?: string[];
   activeChildId?: string;
+  turnId?: string;
+  originId?: string;
+  branchKind?: "normal" | "retry" | "edit";
   model?: ModelType;
   displayName?: string;
   providerName?: string;
@@ -82,6 +85,7 @@ export function createMessage(override: Partial<ChatMessage>): ChatMessage {
     date: new Date().toLocaleString(),
     role: "user",
     content: "",
+    branchKind: "normal",
     ...override,
   };
 }
@@ -103,6 +107,7 @@ export interface ChatSession {
   topic: string;
 
   memoryPrompt: string;
+  enableMessageTree?: boolean;
   messageTree?: Record<string, ChatMessage>;
   rootMessageIds?: string[];
   activeRootId?: string;
@@ -149,8 +154,15 @@ export const BOT_HELLO: ChatMessage = createMessage({
 
 const NO_ACTIVE_MESSAGE = "";
 
-function normalizeTreeNode(message: ChatMessage) {
+function normalizeTreeNode(message: ChatMessage, parent?: ChatMessage) {
   message.childrenIds = message.childrenIds?.filter(Boolean) ?? [];
+  message.turnId =
+    message.turnId ??
+    (message.role === "assistant"
+      ? parent?.turnId ?? parent?.id ?? message.id
+      : message.id);
+  message.originId = message.originId || undefined;
+  message.branchKind = message.branchKind ?? "normal";
   return message;
 }
 
@@ -160,8 +172,8 @@ export function rebuildMessageTreeFromMessages(session: ChatSession) {
   let parent: ChatMessage | undefined;
 
   session.messages.forEach((message) => {
-    normalizeTreeNode(message);
     message.parentId = parent?.id;
+    normalizeTreeNode(message, parent);
     message.childrenIds = [];
     message.activeChildId = undefined;
     tree[message.id] = message;
@@ -180,6 +192,20 @@ export function rebuildMessageTreeFromMessages(session: ChatSession) {
   session.activeRootId = rootMessageIds[0];
 }
 
+function hasMessageTreeBranches(session: ChatSession) {
+  const tree = session.messageTree;
+  if (!tree) return false;
+
+  const hasRootBranch =
+    (session.rootMessageIds ?? []).filter((id) => tree[id]).length > 1;
+  const hasNodeBranch = Object.values(tree).some(
+    (message) =>
+      (message.childrenIds ?? []).filter((id) => tree[id]).length > 1,
+  );
+
+  return hasRootBranch || hasNodeBranch;
+}
+
 export function getActiveMessagePath(session: ChatSession) {
   const tree = session.messageTree;
   if (!tree) return session.messages;
@@ -196,7 +222,10 @@ export function getActiveMessagePath(session: ChatSession) {
     const message: ChatMessage | undefined = tree[currentId];
     if (!message) break;
     visited.add(currentId);
-    normalizeTreeNode(message);
+    normalizeTreeNode(
+      message,
+      message.parentId ? tree[message.parentId] : undefined,
+    );
     messages.push(message);
 
     const nextId: string | undefined = message.activeChildId;
@@ -221,7 +250,10 @@ function restoreActiveDescendantPath(session: ChatSession, messageId: string) {
 
   while (current && !visited.has(current.id)) {
     visited.add(current.id);
-    normalizeTreeNode(current);
+    normalizeTreeNode(
+      current,
+      current.parentId ? tree[current.parentId] : undefined,
+    );
 
     const activeChildId = current.activeChildId;
     const activeChildExists =
@@ -257,7 +289,12 @@ export function ensureMessageTree(session: ChatSession) {
   const tree = session.messageTree;
   if (!tree) return;
 
-  Object.values(tree).forEach(normalizeTreeNode);
+  Object.values(tree).forEach((message) =>
+    normalizeTreeNode(
+      message,
+      message.parentId ? tree[message.parentId] : undefined,
+    ),
+  );
   session.rootMessageIds =
     session.rootMessageIds?.filter((id) => tree[id]) ??
     Object.values(tree)
@@ -330,8 +367,8 @@ export function appendMessagesToActivePath(
   let parent = getActiveMessagePath(session).at(-1);
 
   newMessages.forEach((message) => {
-    normalizeTreeNode(message);
     message.parentId = parent?.id;
+    normalizeTreeNode(message, parent);
     message.childrenIds = [];
     message.activeChildId = undefined;
     tree[message.id] = message;
@@ -360,23 +397,38 @@ export function appendMessagesToActivePath(
 export function removeMessageFromTree(session: ChatSession, messageId: string) {
   ensureMessageTree(session);
   const tree = session.messageTree;
-  if (!tree?.[messageId]) return;
+  if (!tree?.[messageId]) {
+    session.messages = session.messages.filter(
+      (message) => message.id !== messageId,
+    );
+    return;
+  }
 
   const message = tree[messageId];
   const idsToDelete: string[] = [];
+  const idsToDeleteSet = new Set<string>();
   const collect = (id: string) => {
     const node = tree[id];
-    if (!node) return;
+    if (!node || idsToDeleteSet.has(id)) return;
+    idsToDeleteSet.add(id);
     idsToDelete.push(id);
     (node.childrenIds ?? []).forEach(collect);
   };
   collect(messageId);
 
-  const siblings = message.parentId
-    ? tree[message.parentId]?.childrenIds ?? []
-    : session.rootMessageIds ?? [];
+  const ownerParentId =
+    message.parentId && tree[message.parentId]?.childrenIds?.includes(messageId)
+      ? message.parentId
+      : Object.values(tree).find(
+          (node) => node.childrenIds?.includes(messageId),
+        )?.id;
+  const isRootMessage =
+    !ownerParentId || (session.rootMessageIds ?? []).includes(messageId);
+  const siblings = isRootMessage
+    ? session.rootMessageIds ?? []
+    : tree[ownerParentId]?.childrenIds ?? [];
   const deletingIndex = siblings.indexOf(messageId);
-  const nextSiblings = siblings.filter((id) => !idsToDelete.includes(id));
+  const nextSiblings = siblings.filter((id) => !idsToDeleteSet.has(id));
   const nextActiveId =
     nextSiblings[
       Math.min(Math.max(deletingIndex, 0), Math.max(nextSiblings.length - 1, 0))
@@ -384,12 +436,33 @@ export function removeMessageFromTree(session: ChatSession, messageId: string) {
 
   idsToDelete.forEach((id) => delete tree[id]);
 
-  if (message.parentId && tree[message.parentId]) {
-    tree[message.parentId].childrenIds = nextSiblings;
-    tree[message.parentId].activeChildId = nextActiveId;
-  } else {
+  if (isRootMessage) {
     session.rootMessageIds = nextSiblings;
     session.activeRootId = nextActiveId;
+  } else if (ownerParentId && tree[ownerParentId]) {
+    tree[ownerParentId].childrenIds = nextSiblings;
+    tree[ownerParentId].activeChildId = nextActiveId;
+  }
+
+  session.rootMessageIds = (session.rootMessageIds ?? []).filter(
+    (id) => tree[id],
+  );
+  Object.values(tree).forEach((node) => {
+    node.childrenIds = (node.childrenIds ?? []).filter((id) => tree[id]);
+    if (
+      node.activeChildId &&
+      node.activeChildId !== NO_ACTIVE_MESSAGE &&
+      !tree[node.activeChildId]
+    ) {
+      node.activeChildId = node.childrenIds[0] ?? NO_ACTIVE_MESSAGE;
+    }
+  });
+  if (
+    session.activeRootId &&
+    session.activeRootId !== NO_ACTIVE_MESSAGE &&
+    !tree[session.activeRootId]
+  ) {
+    session.activeRootId = session.rootMessageIds[0] ?? NO_ACTIVE_MESSAGE;
   }
 
   syncMessagesFromTree(session);
@@ -445,6 +518,7 @@ function createEmptySession(): ChatSession {
     id: nanoid(),
     topic: DEFAULT_TOPIC,
     memoryPrompt: "",
+    enableMessageTree: false,
     messageTree: {},
     rootMessageIds: [],
     activeRootId: undefined,
@@ -592,6 +666,7 @@ export const useChatStore = createPersistStore(
         const newSession = createEmptySession();
 
         newSession.topic = currentSession.topic;
+        newSession.enableMessageTree = !!currentSession.enableMessageTree;
         // 深拷贝消息
         newSession.messages = currentSession.messages.map((msg) => ({
           ...msg,
@@ -599,6 +674,9 @@ export const useChatStore = createPersistStore(
           parentId: undefined,
           childrenIds: [],
           activeChildId: undefined,
+          turnId: undefined,
+          originId: undefined,
+          branchKind: "normal",
         }));
         rebuildMessageTreeFromMessages(newSession);
         newSession.mask = {
@@ -771,6 +849,9 @@ export const useChatStore = createPersistStore(
 
         const session = sessions[index];
         ensureMessageTree(session);
+        if (session.enableMessageTree && session.dualModelMode) {
+          session.dualModelMode = false;
+        }
 
         return session;
       },
@@ -801,6 +882,7 @@ export const useChatStore = createPersistStore(
       ) {
         if (branchParentId !== undefined) {
           get().updateCurrentSession((session) => {
+            session.enableMessageTree = true;
             activateMessagePath(session, branchParentId, { truncate: true });
           });
         }
@@ -891,10 +973,12 @@ export const useChatStore = createPersistStore(
           content: mContent,
           isContinuePrompt: isContinuePrompt,
           quote: quote,
+          branchKind: branchParentId !== undefined ? "retry" : "normal",
           statistic: {
             // singlePromptTokens: totalTokens ?? 0,
           },
         });
+        userMessage.turnId = userMessage.turnId ?? userMessage.id;
         if (userMessage.statistic) {
           userMessage.statistic.singlePromptTokens =
             estimateMessageTokenInLLM(userMessage);
@@ -905,6 +989,8 @@ export const useChatStore = createPersistStore(
           streaming: true,
           model: modelConfig.model,
           providerName: modelConfig.providerName || "OpenAI",
+          turnId: userMessage.turnId,
+          branchKind: userMessage.branchKind,
         });
 
         // get recent messages
@@ -924,6 +1010,7 @@ export const useChatStore = createPersistStore(
             content: displayContent,
             modelSource: "secondary" as const,
           };
+          secondaryUserMessage.turnId = secondaryUserMessage.id;
           secondaryBotMessage = createMessage({
             role: "assistant",
             streaming: true,
@@ -931,6 +1018,8 @@ export const useChatStore = createPersistStore(
             providerName: session.secondaryModelConfig.providerName,
             displayName: session.secondaryModelConfig.displayName,
             modelSource: "secondary",
+            turnId: secondaryUserMessage.turnId,
+            branchKind: secondaryUserMessage.branchKind,
           });
         }
 
@@ -1313,6 +1402,7 @@ export const useChatStore = createPersistStore(
 
       switchMessageBranch(messageId: string, delta: number) {
         get().updateCurrentSession((session) => {
+          if (!session.enableMessageTree) return;
           switchMessageBranchInSession(session, messageId, delta);
         });
       },
@@ -1320,6 +1410,7 @@ export const useChatStore = createPersistStore(
       resetSession() {
         get().updateCurrentSession((session) => {
           session.messages = [];
+          session.enableMessageTree = false;
           session.messageTree = {};
           session.rootMessageIds = [];
           session.activeRootId = undefined;
@@ -1638,9 +1729,28 @@ export const useChatStore = createPersistStore(
       },
 
       // ========== 双模型模式相关方法 ==========
+      toggleMessageTreeMode() {
+        get().updateCurrentSession((session) => {
+          const enableMessageTree = !session.enableMessageTree;
+
+          if (enableMessageTree) {
+            session.enableMessageTree = true;
+            session.dualModelMode = false;
+            ensureMessageTree(session);
+            return;
+          }
+
+          syncMessagesFromTree(session);
+          session.enableMessageTree = false;
+          rebuildMessageTreeFromMessages(session);
+        });
+      },
+
       toggleDualModelMode(displayName?: string) {
         const session = get().currentSession();
         get().updateCurrentSession((session) => {
+          if (session.enableMessageTree) return;
+
           session.dualModelMode = !session.dualModelMode;
 
           // 首次开启时初始化副模型配置
@@ -1820,7 +1930,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.5,
+    version: 3.7,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -1903,6 +2013,22 @@ export const useChatStore = createPersistStore(
       if (version < 3.5) {
         newState.sessions.forEach((s) => {
           rebuildMessageTreeFromMessages(s);
+        });
+      }
+      if (version < 3.6) {
+        newState.sessions.forEach((s) => {
+          s.enableMessageTree =
+            s.enableMessageTree ?? hasMessageTreeBranches(s);
+        });
+      }
+      if (version < 3.7) {
+        newState.sessions.forEach((s) => {
+          if (!hasMessageTreeBranches(s)) {
+            s.enableMessageTree = false;
+          }
+          if (s.enableMessageTree) {
+            s.dualModelMode = false;
+          }
         });
       }
 

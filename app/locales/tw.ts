@@ -117,6 +117,15 @@ const tw = {
       User: "使用者",
       Assistant: "助手",
     },
+    MessageTree: {
+      Enable: "開啟樹形會話",
+      Disable: "關閉樹形會話",
+      EnabledToast: "已開啟樹形會話",
+      DisabledToast: "已關閉樹形會話，僅保留啟用分支，其他分支訊息將被移除",
+      DisableConfirm:
+        "關閉樹形會話後，僅保留目前啟用分支，其他分支訊息將被移除。確認關閉？",
+      DualModelNotSupported: "樹形會話不支援雙模型模式",
+    },
     Typing: "正在輸入…",
     Input: (submitKey: string) => {
       var inputHints = `輸入訊息後，按下 ${submitKey} 鍵即可傳送`;

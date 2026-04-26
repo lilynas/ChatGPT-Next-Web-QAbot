@@ -1521,19 +1521,28 @@
 // ========== 双模型对话模式样式 ==========
 
 // 双模型切换按钮
-.dual-model-toggle {
+.dual-model-toggle,
+.message-tree-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.dual-model-active {
+.dual-model-active,
+.message-tree-active {
   button {
     background-color: var(--primary) !important;
   }
 
   svg {
     stroke: var(--white);
+  }
+}
+
+.dual-model-disabled {
+  button {
+    cursor: not-allowed;
+    opacity: 0.45;
   }
 }
 

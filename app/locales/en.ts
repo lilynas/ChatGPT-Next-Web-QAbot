@@ -304,6 +304,16 @@ const en: LocaleType = {
       User: "User",
       Assistant: "Assistant",
     },
+    MessageTree: {
+      Enable: "Enable branched chat",
+      Disable: "Disable branched chat",
+      EnabledToast: "Branched chat enabled",
+      DisabledToast:
+        "Branched chat disabled. Only the active branch is kept; other branch messages are removed.",
+      DisableConfirm:
+        "Turning off branched chat keeps only the active branch and removes all other branch messages. Continue?",
+      DualModelNotSupported: "Branched chat does not support dual-model mode",
+    },
     Typing: "Typing…",
     GoToCustomProviderConfig: "Go to Custom AI Provider Config",
     Input: (submitKey: string, isMobileScreen: boolean = false) => {
