@@ -1532,9 +1532,11 @@
 .message-tree-active {
   button {
     background-color: var(--primary) !important;
+    color: var(--white);
   }
 
-  svg {
+  svg,
+  svg * {
     stroke: var(--white);
   }
 }
