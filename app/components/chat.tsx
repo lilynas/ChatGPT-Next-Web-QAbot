@@ -2076,6 +2076,8 @@ function MessageBranchSwitcher(props: {
 }) {
   const canSwitchPrev = props.branchInfo.current > 1;
   const canSwitchNext = props.branchInfo.current < props.branchInfo.total;
+  const previousBranchLabel = Locale.Chat.MessageTree.PreviousBranch;
+  const nextBranchLabel = Locale.Chat.MessageTree.NextBranch;
 
   return (
     <div className={styles["message-branch-switcher"]}>
@@ -2084,8 +2086,8 @@ function MessageBranchSwitcher(props: {
         className={styles["message-branch-button"]}
         disabled={!canSwitchPrev}
         onClick={() => canSwitchPrev && props.onSwitch(-1)}
-        title="上一分支"
-        aria-label="上一分支"
+        title={previousBranchLabel}
+        aria-label={previousBranchLabel}
       >
         {"<"}
       </button>
@@ -2097,8 +2099,8 @@ function MessageBranchSwitcher(props: {
         className={styles["message-branch-button"]}
         disabled={!canSwitchNext}
         onClick={() => canSwitchNext && props.onSwitch(1)}
-        title="下一分支"
-        aria-label="下一分支"
+        title={nextBranchLabel}
+        aria-label={nextBranchLabel}
       >
         {">"}
       </button>

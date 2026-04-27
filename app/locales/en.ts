@@ -318,6 +318,8 @@ const en: LocaleType = {
         "Turning off branched chat keeps only the active branch and removes all other branch messages. Continue?",
       DeleteNodeConfirm:
         "Deleting this node also removes its descendant branches. Continue?",
+      PreviousBranch: "Previous branch",
+      NextBranch: "Next branch",
       DualModelNotSupported: "Branched chat does not support dual-model mode",
     },
     Typing: "Typing…",

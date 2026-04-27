@@ -129,6 +129,8 @@ const tw = {
       DisableConfirm:
         "關閉樹形會話後，僅保留目前啟用分支，其他分支訊息將被移除。確認關閉？",
       DeleteNodeConfirm: "刪除該節點後，它的後續子分支也會被移除。確認刪除？",
+      PreviousBranch: "上一分支",
+      NextBranch: "下一分支",
       DualModelNotSupported: "樹形會話不支援雙模型模式",
     },
     Typing: "正在輸入…",

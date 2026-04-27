@@ -396,11 +396,20 @@ export function appendMessagesToActivePath(
 
 export function removeMessageFromTree(session: ChatSession, messageId: string) {
   ensureMessageTree(session);
+  const activeMessagesBeforeDelete = session.messages.slice();
   const tree = session.messageTree;
   if (!tree?.[messageId]) {
+    const deletedMessageIds = [messageId];
+    cleanupDeletedMessageRuntimeState(session, deletedMessageIds);
     session.messages = session.messages.filter(
       (message) => message.id !== messageId,
     );
+    resetMemoryIfDeletedSummarizedMessages(
+      session,
+      activeMessagesBeforeDelete,
+      deletedMessageIds,
+    );
+    syncSessionDerivedState(session);
     return;
   }
 
@@ -415,6 +424,7 @@ export function removeMessageFromTree(session: ChatSession, messageId: string) {
     (node.childrenIds ?? []).forEach(collect);
   };
   collect(messageId);
+  cleanupDeletedMessageRuntimeState(session, idsToDelete);
 
   const ownerParentId =
     message.parentId && tree[message.parentId]?.childrenIds?.includes(messageId)
@@ -466,6 +476,12 @@ export function removeMessageFromTree(session: ChatSession, messageId: string) {
   }
 
   syncMessagesFromTree(session);
+  resetMemoryIfDeletedSummarizedMessages(
+    session,
+    activeMessagesBeforeDelete,
+    idsToDelete,
+  );
+  syncSessionDerivedState(session);
 }
 
 export function getMessageBranchInfo(session: ChatSession, messageId: string) {
@@ -573,6 +589,66 @@ function createTemplateRegex(output: string) {
 
 function countMessages(msgs: ChatMessage[]) {
   return msgs.reduce((pre, cur) => pre + estimateMessageTokenInLLM(cur), 0);
+}
+
+function calculateSessionStat(messages: ChatMessage[]): ChatStat {
+  return messages.reduce(
+    (stat, message) => {
+      const contentText =
+        typeof message.content === "string"
+          ? message.content
+          : getMessageTextContent(message);
+      stat.charCount += contentText.length;
+      stat.tokenCount += estimateMessageTokenInLLM(message);
+      return stat;
+    },
+    { tokenCount: 0, wordCount: 0, charCount: 0 },
+  );
+}
+
+function syncSessionDerivedState(session: ChatSession) {
+  session.stat = calculateSessionStat(session.messages);
+  session.lastSummarizeIndex = Math.min(
+    session.lastSummarizeIndex ?? 0,
+    session.messages.length,
+  );
+
+  const clearContextIndex = session.messages.reduce<number | undefined>(
+    (index, message, i) => (message.beClear ? i + 1 : index),
+    undefined,
+  );
+  session.clearContextIndex = clearContextIndex;
+  session.lastUpdate = Date.now();
+}
+
+function cleanupDeletedMessageRuntimeState(
+  session: ChatSession,
+  deletedMessageIds: string[],
+) {
+  deletedMessageIds.forEach((id) => {
+    ChatControllerPool.stop(session.id, id);
+    ChatControllerPool.remove(session.id, id);
+  });
+}
+
+function resetMemoryIfDeletedSummarizedMessages(
+  session: ChatSession,
+  activeMessagesBeforeDelete: ChatMessage[],
+  deletedMessageIds: string[],
+) {
+  if (!session.memoryPrompt || !session.lastSummarizeIndex) return;
+
+  const deletedMessageIdSet = new Set(deletedMessageIds);
+  const firstDeletedActiveIndex = activeMessagesBeforeDelete.findIndex(
+    (message) => deletedMessageIdSet.has(message.id),
+  );
+  if (
+    firstDeletedActiveIndex >= 0 &&
+    firstDeletedActiveIndex < session.lastSummarizeIndex
+  ) {
+    session.memoryPrompt = "";
+    session.lastSummarizeIndex = 0;
+  }
 }
 
 export function estimateMessageTokenInLLM(message: RequestMessage) {
@@ -1648,7 +1724,11 @@ export const useChatStore = createPersistStore(
 
       updateStat(message: ChatMessage) {
         get().updateCurrentSession((session) => {
-          session.stat.charCount += message.content.length;
+          const contentText =
+            typeof message.content === "string"
+              ? message.content
+              : getMessageTextContent(message);
+          session.stat.charCount += contentText.length;
           session.stat.tokenCount += estimateMessageTokenInLLM(message);
           // TODO: should update chat count and word count
         });
