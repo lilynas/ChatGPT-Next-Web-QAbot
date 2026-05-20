@@ -1320,9 +1320,27 @@ function escapeDollarNumber(text: string): string {
       continue;
     }
 
-    // 转义 $数字（无条件）：避免 remark-math 把 $5 这种货币表达识别为公式起点
-    // 合法的行内公式极少以 $5 这种形式开头；改写后 $5 → &#36;5
+    // 转义 $数字：避免 $5 这种货币被 remark-math 识别为公式起点
+    // 视为公式不转义的条件（满足任一即可）：
+    //  1) 同行内存在闭合 $，且闭合 $ 之后不紧跟数字（排除 $5 + $3 货币写法）
+    //  2) 同行内存在闭合 $，且其间含 LaTeX 命令或数学符号（^ _ =）
+    // 让 $1$、$1 \sim n$、$1 = 2$ 等合法行内公式可以正常渲染
     if (char === "$" && nextChar >= "0" && nextChar <= "9") {
+      const newlineIdx = text.indexOf("\n", i + 1);
+      const closeIdx = text.indexOf("$", i + 1);
+      const inSameLine =
+        closeIdx !== -1 && (newlineIdx === -1 || closeIdx < newlineIdx);
+      if (inSameLine) {
+        const afterClose = text[closeIdx + 1] || " ";
+        const isAfterDigit = afterClose >= "0" && afterClose <= "9";
+        const hasMathSign = /\\[a-zA-Z]|[\^_=]/.test(
+          text.substring(i + 1, closeIdx),
+        );
+        if (!isAfterDigit || hasMathSign) {
+          result.push("$");
+          continue;
+        }
+      }
       result.push("&#36;");
       continue;
     }
