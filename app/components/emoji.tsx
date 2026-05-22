@@ -52,6 +52,7 @@ export function AvatarPicker(props: {
   return (
     <EmojiPicker
       width={"100%"}
+      height={"400px"}
       lazyLoadEmojis
       theme={EmojiTheme.AUTO}
       getEmojiUrl={getEmojiUrl}

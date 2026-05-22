@@ -78,6 +78,7 @@ export function MaskConfig(props: {
   extraListItems?: JSX.Element;
   readonly?: boolean;
   shouldSyncFromGlobal?: boolean;
+  maskMode?: boolean;
 }) {
   const [showPicker, setShowPicker] = useState(false);
 
@@ -248,6 +249,7 @@ export function MaskConfig(props: {
         <ModelConfigList
           modelConfig={{ ...props.mask.modelConfig }}
           updateConfig={updateConfig}
+          maskMode={props.maskMode}
         />
         {props.extraListItems}
       </List>
@@ -806,6 +808,7 @@ export function MaskPage() {
           <Modal
             title={Locale.Mask.EditModal.Title(editingMask?.builtin)}
             onClose={closeMaskModal}
+            defaultMax={true}
             actions={[
               <IconButton
                 icon={<DownloadIcon />}
@@ -838,6 +841,7 @@ export function MaskPage() {
                 maskStore.updateMask(editingMaskId!, updater)
               }
               readonly={editingMask.builtin}
+              maskMode={true}
             />
           </Modal>
         </div>

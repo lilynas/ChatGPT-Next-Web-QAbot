@@ -53,6 +53,7 @@ function isModelAvailable(
 export function ModelConfigList(props: {
   modelConfig: ModelConfig;
   updateConfig: (updater: (config: ModelConfig) => void) => void;
+  maskMode?: boolean;
 }) {
   const allModels = useModelTable();
   const groupModels = groupBy(
@@ -143,6 +144,139 @@ export function ModelConfigList(props: {
     ocrModelValue,
     textProcessModelValue,
   ]);
+
+  if (props.maskMode) {
+    return (
+      <>
+        <ListItem
+          title={Locale.Settings.Model}
+          className="mobile-vertical"
+          vertical={true}
+        >
+          <Select
+            aria-label={Locale.Settings.Model}
+            value={chatModelValue}
+            align="left"
+            onChange={(e) => {
+              const value = e.currentTarget.value;
+              setChatModelValue(value);
+              const [model, providerName] = value.split(/@(?=[^@]*$)/);
+              props.updateConfig((config) => {
+                config.model = ModalConfigValidator.model(model);
+                config.providerName = providerName as ServiceProvider;
+              });
+            }}
+          >
+            {accessStore.defaultModel && (
+              <option value={accessStore.defaultModel}>
+                【Default】{accessStore.defaultModel}
+              </option>
+            )}
+            {Object.keys(groupModels).map((providerName, index) => (
+              <optgroup label={providerName} key={index}>
+                {groupModels[providerName].map((v, i) => (
+                  <option
+                    value={`${v.name}@${v.provider?.providerName}`}
+                    key={i}
+                  >
+                    {v.displayName}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        </ListItem>
+
+        <ListItem
+          title={Locale.Settings.Temperature.Title}
+          subTitle={Locale.Settings.Temperature.SubTitle}
+        >
+          <input
+            aria-label={Locale.Settings.Temperature.Title}
+            type="number"
+            value={props.modelConfig.temperature}
+            style={{ width: "80px" }}
+            onChange={(e) => {
+              props.updateConfig((config) => {
+                config.temperature = ModalConfigValidator.temperature(
+                  e.currentTarget.valueAsNumber,
+                );
+              });
+            }}
+          />
+        </ListItem>
+
+        <ListItem
+          title={Locale.Settings.MaxTokens.Title}
+          subTitle={Locale.Settings.MaxTokens.SubTitle}
+        >
+          <input
+            aria-label={Locale.Settings.MaxTokens.Title}
+            type="number"
+            min={10}
+            max={512000}
+            value={props.modelConfig.max_tokens}
+            style={{ width: "80px" }}
+            onChange={(e) =>
+              props.updateConfig((config) => {
+                config.max_tokens = ModalConfigValidator.max_tokens(
+                  e.currentTarget.valueAsNumber,
+                );
+              })
+            }
+          />
+        </ListItem>
+
+        <ListItem
+          title={Locale.Settings.InputTemplate.Title}
+          subTitle={Locale.Settings.InputTemplate.SubTitle}
+        >
+          <input
+            aria-label={Locale.Settings.InputTemplate.Title}
+            type="text"
+            value={props.modelConfig.template}
+            onChange={(e) =>
+              props.updateConfig(
+                (config) => (config.template = e.currentTarget.value),
+              )
+            }
+          ></input>
+        </ListItem>
+
+        <ListItem
+          title={Locale.Settings.HistoryCount.Title}
+          subTitle={Locale.Settings.HistoryCount.SubTitle}
+        >
+          <input
+            aria-label={Locale.Settings.HistoryCount.Title}
+            type="number"
+            min={0}
+            max={64}
+            value={props.modelConfig.historyMessageCount}
+            onChange={(e) =>
+              props.updateConfig(
+                (config) =>
+                  (config.historyMessageCount = e.currentTarget.valueAsNumber),
+              )
+            }
+          />
+        </ListItem>
+
+        <ListItem title={Locale.Memory.Title} subTitle={Locale.Memory.Send}>
+          <input
+            aria-label={Locale.Memory.Title}
+            type="checkbox"
+            checked={props.modelConfig.sendMemory}
+            onChange={(e) =>
+              props.updateConfig(
+                (config) => (config.sendMemory = e.currentTarget.checked),
+              )
+            }
+          ></input>
+        </ListItem>
+      </>
+    );
+  }
 
   return (
     <>

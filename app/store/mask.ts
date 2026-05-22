@@ -21,6 +21,19 @@ export type Mask = {
   enableCodeFold?: boolean;
 };
 
+/** 面具可覆盖的模型配置项（精简集），仅保留与角色定位相关的参数 */
+export type MaskModelConfig = Partial<
+  Pick<
+    ModelConfig,
+    | "model"
+    | "temperature"
+    | "max_tokens"
+    | "sendMemory"
+    | "historyMessageCount"
+    | "template"
+  >
+>;
+
 export const DEFAULT_MASK_STATE = {
   masks: {} as Record<string, Mask>,
   language: undefined as Lang | undefined,
