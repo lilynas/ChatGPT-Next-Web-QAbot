@@ -431,45 +431,46 @@ export class ChatGPTApi implements LLMApi {
     ) {
       requestPayload["stream_options"] = { include_usage: true };
     }
-    if (!isDeepseekReasoner) {
-      if (modelConfig.temperature_enabled) {
-        requestPayload["temperature"] = !isO1 ? modelConfig.temperature : 1;
-      }
-      if (modelConfig.top_p_enabled) {
-        requestPayload["top_p"] = !isO1 ? modelConfig.top_p : 1;
-      }
-    }
+    // 辅助任务（translate/ocr/improve/topic/compress）不传递额外参数
+    const isAuxiliaryTask = options?.type && options.type !== "chat";
 
-    // add max_tokens to vision model
-    // if (visionModel && modelConfig.model.includes("preview")) {
-    if (
-      modelConfig.max_tokens_enabled &&
-      options?.type !== "compress" &&
-      options?.type !== "topic"
-    ) {
-      if (isGrok) {
-        requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
-      } else {
-        requestPayload["max_tokens"] = modelConfig.max_tokens;
+    if (!isAuxiliaryTask) {
+      if (!isDeepseekReasoner) {
+        if (modelConfig.temperature_enabled) {
+          requestPayload["temperature"] = !isO1 ? modelConfig.temperature : 1;
+        }
+        if (modelConfig.top_p_enabled) {
+          requestPayload["top_p"] = !isO1 ? modelConfig.top_p : 1;
+        }
       }
-    }
 
-    if (!isMistral && !isDeepseekReasoner) {
-      if (modelConfig.presence_penalty_enabled) {
-        requestPayload["presence_penalty"] = modelConfig.presence_penalty;
+      // add max_tokens to vision model
+      // if (visionModel && modelConfig.model.includes("preview")) {
+      if (modelConfig.max_tokens_enabled) {
+        if (isGrok) {
+          requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
+        } else {
+          requestPayload["max_tokens"] = modelConfig.max_tokens;
+        }
       }
-      if (modelConfig.frequency_penalty_enabled) {
-        requestPayload["frequency_penalty"] = modelConfig.frequency_penalty;
-      }
-      if (isO1) {
+
+      if (!isMistral && !isDeepseekReasoner) {
         if (modelConfig.presence_penalty_enabled) {
-          requestPayload["presence_penalty"] = 0;
+          requestPayload["presence_penalty"] = modelConfig.presence_penalty;
         }
         if (modelConfig.frequency_penalty_enabled) {
-          requestPayload["frequency_penalty"] = 0;
+          requestPayload["frequency_penalty"] = modelConfig.frequency_penalty;
         }
-        if (modelConfig.max_tokens_enabled) {
-          requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
+        if (isO1) {
+          if (modelConfig.presence_penalty_enabled) {
+            requestPayload["presence_penalty"] = 0;
+          }
+          if (modelConfig.frequency_penalty_enabled) {
+            requestPayload["frequency_penalty"] = 0;
+          }
+          if (modelConfig.max_tokens_enabled) {
+            requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
+          }
         }
       }
     }
