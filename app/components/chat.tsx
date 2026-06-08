@@ -457,6 +457,7 @@ function useSubmitHandler() {
   return {
     submitKey,
     shouldSubmit,
+    isComposing,
   };
 }
 
@@ -498,6 +499,8 @@ export function PromptHints(props: {
       } else if (e.key === "ArrowDown") {
         changeIndex(-1);
       } else if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
         const selectedPrompt = props.prompts.at(selectIndex);
         if (selectedPrompt) {
           props.onPromptSelect(selectedPrompt);
@@ -3467,7 +3470,7 @@ function ChatComponent() {
 
   const [userInput, setUserInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { submitKey, shouldSubmit } = useSubmitHandler();
+  const { submitKey, shouldSubmit, isComposing } = useSubmitHandler();
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [hitBottom, setHitBottom] = useState(true);
@@ -3922,6 +3925,13 @@ function ChatComponent() {
   const onInput = (text: string) => {
     let shouldProcessNormally = true;
 
+    setUserInput(text);
+
+    // 如果正在使用输入法，只更新输入内容，不触发匹配
+    if (isComposing.current) {
+      return;
+    }
+
     // 只有在功能启用时才处理替换和还原逻辑
     if (config.enableTextExpansion) {
       // 1. 首先检查是否需要还原 - 检测到删除操作后立即还原
@@ -3967,7 +3977,7 @@ function ChatComponent() {
                     inputRef.current.setSelectionRange(targetPos, targetPos);
                     inputRef.current.focus();
                   }
-                }, 0);
+                }, 50); // 增加延迟，确保 React 渲染完成后再设置光标
               }
 
               shouldProcessNormally = false;
@@ -3987,7 +3997,6 @@ function ChatComponent() {
         setLastExpansion(null);
       }
 
-      setUserInput(text);
       const n = text.trim().length;
 
       // const atMatch = text.match(/^@([\w-]*)$/); // 完整匹配 @ 后面任意单词或短线
@@ -4023,6 +4032,19 @@ function ChatComponent() {
         setPromptHints([]);
       }
     }
+  };
+
+  // 处理输入法结束事件，确保输入法完成后触发匹配
+  const handleCompositionEnd = (
+    e: React.CompositionEvent<HTMLTextAreaElement>,
+  ) => {
+    // compositionend 后手动触发一次 onInput，确保匹配逻辑执行
+    // 先保存值，因为异步执行时 e.currentTarget 会变成 null
+    const value = e.currentTarget.value;
+    // 使用 setTimeout 确保在 isComposing.current 更新后执行
+    setTimeout(() => {
+      onInput(value);
+    }, 10); // 增加延迟到 10ms，确保状态更新和光标设置都能正确执行
   };
 
   useEffect(() => {
@@ -7608,6 +7630,7 @@ function ChatComponent() {
             className={styles["chat-input"]}
             placeholder={Locale.Chat.Input(submitKey, isMobileScreen)}
             onInput={(e) => onInput(e.currentTarget.value)}
+            onCompositionEnd={handleCompositionEnd}
             value={userInput}
             onKeyDown={onInputKeyDown}
             // onFocus={scrollToBottom}
