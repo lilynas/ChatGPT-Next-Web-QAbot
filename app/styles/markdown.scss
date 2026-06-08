@@ -1077,6 +1077,11 @@
   list-style-type: none;
 }
 
+.markdown-body .task-list-item > input[type="checkbox"] {
+  margin: 0 0.2em 0.25em -1.8em;
+  vertical-align: middle;
+}
+
 .markdown-body .task-list-item label {
   font-weight: var(--base-text-weight-normal, 400);
 }
@@ -1104,6 +1109,12 @@
 
 .markdown-body .contains-task-list {
   position: relative;
+  padding-left: 1.2em;
+}
+
+.markdown-body .task-list-item > input[type="checkbox"] {
+  margin-left: -0.2em;
+  margin-right: 0.5em;
 }
 
 .markdown-body .contains-task-list:hover .task-list-item-convert-container,
