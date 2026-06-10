@@ -1679,19 +1679,30 @@ export function ChatActions(props: {
 
     // if current model is not available
     // switch to first available model
-    const isUnavaliableModel = !models.some((m) => m.name === currentModel);
+    const isUnavaliableModel = !models.some(
+      (m) =>
+        m.name === currentModel &&
+        m.provider?.providerName === currentProviderName,
+    );
     if (isUnavaliableModel && models.length > 0) {
       // show next model to default model if exist
-      let nextModel: ModelType = (
-        models.find((model) => model.isDefault) || models[0]
-      ).name;
-      chatStore.updateTargetSession(
-        session,
-        (session) => (session.mask.modelConfig.model = nextModel),
-      );
-      showToast(nextModel);
+      const nextModel = models.find((model) => model.isDefault) || models[0];
+      chatStore.updateTargetSession(session, (session) => {
+        session.mask.modelConfig.model = nextModel.name as ModelType;
+        session.mask.modelConfig.providerName = nextModel.provider
+          ?.providerName as ServiceProvider;
+      });
+      showToast(nextModel.displayName || nextModel.name);
     }
-  }, [chatStore, currentModel, models, session, setAttachImages, setUploading]);
+  }, [
+    chatStore,
+    currentModel,
+    currentProviderName,
+    models,
+    session,
+    setAttachImages,
+    setUploading,
+  ]);
 
   return (
     <div className={styles["chat-input-actions"]}>
